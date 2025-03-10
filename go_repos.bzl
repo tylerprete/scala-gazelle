@@ -17,8 +17,8 @@ def gazelle_extension_deps():
         name = "com_github_bmatcuk_doublestar_v4",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/bmatcuk/doublestar/v4",
-        sum = "h1:X0krlUVAVmtr2cRoTqR8aDMrDqnB36ht8wpWTiQ3jsA=",
-        version = "v4.0.2",
+        sum = "",
+        version = "v4.8.1",
     )
     go_repository(
         name = "com_github_roaringbitmap_roaring",
