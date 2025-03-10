@@ -7,7 +7,7 @@ require (
 	github.com/bazelbuild/bazel-gazelle v0.28.1-0.20221114044302-2d1002926dd1
 	github.com/bazelbuild/buildtools v0.0.0-20221004120235-7186f635531b
 	github.com/bazelbuild/rules_go v0.35.0
-	github.com/bmatcuk/doublestar/v4 v4.2.0
+	github.com/bmatcuk/doublestar/v4 v4.8.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dghubble/trie v0.0.0-20220811160003-18e0eff3ca7b
 	github.com/google/go-cmp v0.5.9
