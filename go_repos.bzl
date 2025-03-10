@@ -52,8 +52,8 @@ def gazelle_extension_deps():
         name = "com_github_emicklei_proto",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/emicklei/proto",
-        sum = "h1:l0QiNT6Qs7Yj0Mb4X6dnWBQer4ebei2BFcgQLbGqUDc=",
-        version = "v1.9.0",
+        sum = "h1:WYxC0OrBuuC+FUCTZvb8+fzEHdZMwLEF+OnVfZA3LXU=",
+        version = "v1.14.0",
     )
 
 def go_repositories():
@@ -230,8 +230,8 @@ def go_repositories():
         name = "com_github_emicklei_proto",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/emicklei/proto",
-        sum = "h1:l0QiNT6Qs7Yj0Mb4X6dnWBQer4ebei2BFcgQLbGqUDc=",
-        version = "v1.9.0",
+        sum = "h1:WYxC0OrBuuC+FUCTZvb8+fzEHdZMwLEF+OnVfZA3LXU=",
+        version = "v1.14.0",
     )
     go_repository(
         name = "com_github_envoyproxy_go_control_plane",
