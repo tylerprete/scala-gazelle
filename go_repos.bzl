@@ -48,6 +48,13 @@ def gazelle_extension_deps():
         sum = "h1:TDVVzd8q/n2YLqidDna2iptspyyNyqi9nZmxNA6Yrg0=",
         version = "v0.0.0-20220811160003-18e0eff3ca7b",
     )
+    go_repository(
+        name = "com_github_emicklei_proto",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/emicklei/proto",
+        sum = "h1:l0QiNT6Qs7Yj0Mb4X6dnWBQer4ebei2BFcgQLbGqUDc=",
+        version = "v1.9.0",
+    )
 
 def go_repositories():
     """go_repositories loads all go_repository dependencies
