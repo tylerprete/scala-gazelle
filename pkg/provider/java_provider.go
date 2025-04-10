@@ -29,6 +29,8 @@ type JavaProvider struct {
 	byLabel map[label.Label]*jipb.JarFile
 	// classSymbols is map a *.ClassFile to it's symbol
 	classSymbols map[*jipb.ClassFile]*resolver.Symbol
+	// preferred packages
+	preferred map[string]label.Label
 }
 
 // NewJavaProvider constructs a new provider.
@@ -37,6 +39,7 @@ func NewJavaProvider() *JavaProvider {
 		byLabel:       make(map[label.Label]*jipb.JarFile),
 		jarindexFiles: make(collections.StringSlice, 0),
 		classSymbols:  make(map[*jipb.ClassFile]*resolver.Symbol),
+		preferred:     make(map[string]label.Label),
 	}
 }
 
@@ -58,7 +61,7 @@ func (p *JavaProvider) CheckFlags(fs *flag.FlagSet, c *config.Config, scope reso
 		if !filepath.IsAbs(filename) {
 			filename = filepath.Join(c.WorkDir, filename)
 		}
-		if err := p.readJarIndex(filename); err != nil {
+		if err := p.readJarIndex(c, filename); err != nil {
 			return err
 		}
 	}
@@ -95,10 +98,15 @@ func (p *JavaProvider) CanProvide(dep *resolver.ImportLabel, expr build.Expr, kn
 	return false
 }
 
-func (p *JavaProvider) readJarIndex(filename string) error {
+// GetPreferredDeps exposes the preferred package mapping for a conflict resolver.
+func (p *JavaProvider) GetPreferredDeps() map[string]label.Label {
+	return p.preferred
+}
+
+func (p *JavaProvider) readJarIndex(c *config.Config, filename string) error {
 	var index jipb.JarIndex
 	if err := protobuf.ReadFile(filename, &index); err != nil {
-		return fmt.Errorf("reading %s: %v", filename, err)
+		return fmt.Errorf("reading jar index file %s: %v (from %s)", filename, err, c.RepoRoot)
 	}
 
 	isPredefined := make(map[label.Label]bool)
@@ -108,6 +116,14 @@ func (p *JavaProvider) readJarIndex(filename string) error {
 			return fmt.Errorf("bad predefined label %q: %v", v, err)
 		}
 		isPredefined[lbl] = true
+	}
+
+	for k, v := range index.Preferred {
+		dep, err := label.Parse(v)
+		if err != nil {
+			return fmt.Errorf("malformed preferred label %s: %v", v, err)
+		}
+		p.preferred[k] = dep
 	}
 
 	for _, jarFile := range index.JarFile {

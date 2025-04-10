@@ -15,13 +15,15 @@ func ExampleLanguage_KnownDirectives() {
 		fmt.Println(d)
 	}
 	// output:
-	// scala_debug
-	// scala_fix_wildcard_imports
-	// scala_rule
-	// resolve_glob
 	// resolve_conflicts
-	// scala_deps_cleaner
-	// resolve_with
 	// resolve_file_symbol_name
+	// resolve_glob
 	// resolve_kind_rewrite_name
+	// resolve_with
+	// scala_debug
+	// scala_log_level
+	// scala_deps_cleaner
+	// scala_fix_wildcard_imports
+	// scala_generate_build_files
+	// scala_rule
 }

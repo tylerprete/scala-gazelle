@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/bazelbuild/bazel-gazelle/config"
@@ -12,6 +13,7 @@ import (
 	"github.com/bazelbuild/bazel-gazelle/rule"
 	"github.com/bazelbuild/buildtools/build"
 	"github.com/bmatcuk/doublestar/v4"
+	"github.com/rs/zerolog"
 
 	"github.com/stackb/scala-gazelle/pkg/collections"
 	"github.com/stackb/scala-gazelle/pkg/resolver"
@@ -20,13 +22,15 @@ import (
 
 type debugAnnotation int
 
+const scalaLangName = "scala"
+
 const (
-	DebugUnknown  debugAnnotation = 0
-	DebugImports  debugAnnotation = 1
-	DebugExports  debugAnnotation = 2
-	DebugDeps     debugAnnotation = 3
-	DebugRule     debugAnnotation = 4
-	scalaLangName                 = "scala"
+	DebugUnknown        debugAnnotation = 0
+	DebugImports        debugAnnotation = 1
+	DebugExports        debugAnnotation = 2
+	DebugDeps           debugAnnotation = 3
+	DebugRule           debugAnnotation = 4
+	DebugDepLabelOrigin debugAnnotation = 5
 )
 
 const (
@@ -34,6 +38,18 @@ const (
 	//
 	// gazelle:scala_debug true
 	scalaDebugDirective = "scala_debug"
+
+	// Change the logging level
+	//
+	// gazelle:scala_log_level WARN|INFO|DEBUG|TRACE
+	scalaLogLevelDirective = "scala_log_level"
+
+	// Limits scala-gazelle to only consider existing build files.  If false,
+	// scala-gazelle itself will never generate new build files.  Defaults to
+	// false.
+	//
+	// gazelle:scala_build_file_generate true
+	scalaGenerateBuildFilesDirective = "scala_generate_build_files"
 
 	// Turn on the wildcard import fixer
 	//
@@ -109,15 +125,17 @@ const (
 
 func DirectiveNames() []string {
 	return []string{
-		scalaDebugDirective,
-		scalaFixWildcardImportDirective,
-		scalaRuleDirective,
-		resolveGlobDirective,
 		resolveConflictsDirective,
-		scalaDepsCleanerDirective,
-		resolveWithDirective,
 		resolveFileSymbolName,
+		resolveGlobDirective,
 		resolveKindRewriteNameDirective,
+		resolveWithDirective,
+		scalaDebugDirective,
+		scalaLogLevelDirective,
+		scalaDepsCleanerDirective,
+		scalaFixWildcardImportDirective,
+		scalaGenerateBuildFilesDirective,
+		scalaRuleDirective,
 	}
 }
 
@@ -135,11 +153,16 @@ type Config struct {
 	annotations            map[debugAnnotation]interface{}
 	conflictResolvers      []resolver.ConflictResolver
 	depsCleaners           []resolver.DepsCleaner
+	generateBuildFiles     bool
+	logger                 zerolog.Logger
+	logLevel               zerolog.Level
 }
 
-// newScalaConfig initializes a new Config.
-func New(universe resolver.Universe, config *config.Config, rel string) *Config {
+// New initializes a new Config.
+func New(logger zerolog.Logger, universe resolver.Universe, config *config.Config, rel string) *Config {
 	return &Config{
+		logLevel:          zerolog.DebugLevel,
+		logger:            logger,
 		config:            config,
 		rel:               rel,
 		universe:          universe,
@@ -160,12 +183,12 @@ func Get(config *config.Config) *Config {
 
 // getOrCreateScalaConfig either inserts a new config into the map under the
 // language name or replaces it with a clone.
-func GetOrCreate(universe resolver.Universe, config *config.Config, rel string) *Config {
+func GetOrCreate(logger zerolog.Logger, universe resolver.Universe, config *config.Config, rel string) *Config {
 	var cfg *Config
 	if existingExt, ok := config.Exts[scalaLangName]; ok {
 		cfg = existingExt.(*Config).clone(config, rel)
 	} else {
-		cfg = New(universe, config, rel)
+		cfg = New(logger.With().Str("rel", rel).Logger(), universe, config, rel)
 	}
 	config.Exts[scalaLangName] = cfg
 	return cfg
@@ -173,7 +196,11 @@ func GetOrCreate(universe resolver.Universe, config *config.Config, rel string) 
 
 // clone copies this config to a new one.
 func (c *Config) clone(config *config.Config, rel string) *Config {
-	clone := New(c.universe, config, rel)
+	clone := New(c.logger, c.universe, config, rel)
+
+	clone.logLevel = c.logLevel
+	clone.generateBuildFiles = c.generateBuildFiles
+
 	for k, v := range c.annotations {
 		clone.annotations[k] = v
 	}
@@ -202,6 +229,11 @@ func (c *Config) clone(config *config.Config, rel string) *Config {
 		clone.fixWildcardImportSpecs = c.fixWildcardImportSpecs[:]
 	}
 	return clone
+}
+
+// Logger returns the child logger set to the configured level
+func (c *Config) Logger(logger zerolog.Logger) zerolog.Logger {
+	return logger.Level(c.logLevel)
 }
 
 // Config returns the parent gazelle configuration
@@ -272,8 +304,16 @@ func (c *Config) ParseDirectives(directives []rule.Directive) (err error) {
 			if err := c.parseScalaDepsCleanerDirective(d); err != nil {
 				return err
 			}
+		case scalaLogLevelDirective:
+			if err := c.parseScalaLogLevelDirective(d); err != nil {
+				return err
+			}
 		case scalaDebugDirective:
 			if err := c.parseScalaAnnotation(d); err != nil {
+				return err
+			}
+		case scalaGenerateBuildFilesDirective:
+			if err := c.parseScalaGenerateBuildFilesDirective(d); err != nil {
 				return err
 			}
 		}
@@ -347,7 +387,6 @@ func (c *Config) parseFixWildcardImport(d rule.Directive) {
 			importPattern:   *intent,
 		}
 		c.fixWildcardImportSpecs = append(c.fixWildcardImportSpecs, spec)
-		log.Printf("Added fix wildcard import spec: %+v", spec)
 	}
 
 }
@@ -407,6 +446,24 @@ func (c *Config) parseResolveConflictsDirective(d rule.Directive) error {
 	return nil
 }
 
+func (c *Config) parseScalaGenerateBuildFilesDirective(d rule.Directive) error {
+	val, err := strconv.ParseBool(d.Value)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %v", scalaGenerateBuildFilesDirective, err)
+	}
+	c.generateBuildFiles = val
+	return nil
+}
+
+func (c *Config) parseScalaLogLevelDirective(d rule.Directive) error {
+	level, err := zerolog.ParseLevel(d.Value)
+	if err != nil {
+		return fmt.Errorf("invalid %v: %v", scalaLogLevelDirective, err)
+	}
+	c.logLevel = level
+	return nil
+}
+
 func (c *Config) parseScalaDepsCleanerDirective(d rule.Directive) error {
 	for _, key := range strings.Fields(d.Value) {
 		intent := collections.ParseIntent(key)
@@ -452,7 +509,7 @@ func (c *Config) parseScalaAnnotation(d rule.Directive) error {
 func (c *Config) getOrCreateScalaRuleConfig(name string) (*scalarule.Config, error) {
 	r, ok := c.rules[name]
 	if !ok {
-		r = scalarule.NewConfig(c.config, name)
+		r = scalarule.NewConfig(c.Logger(c.logger), c.config, name)
 		r.Implementation = name
 		c.rules[name] = r
 	}
@@ -491,13 +548,13 @@ func (c *Config) ShouldAnnotateImports() bool {
 	return ok
 }
 
-func (c *Config) shouldAnnotateExports() bool {
-	_, ok := c.annotations[DebugExports]
+func (c *Config) shouldAnnotateDeps() bool {
+	_, ok := c.annotations[DebugDeps]
 	return ok
 }
 
-func (c *Config) shouldAnnotateDeps() bool {
-	_, ok := c.annotations[DebugDeps]
+func (c *Config) shouldAnnotateDepLabelOrigin() bool {
+	_, ok := c.annotations[DebugDepLabelOrigin]
 	return ok
 }
 
@@ -506,9 +563,15 @@ func (c *Config) ShouldAnnotateRule() bool {
 	return ok
 }
 
+func (c *Config) GenerateBuildFiles() bool {
+	return c.generateBuildFiles
+}
+
 func (c *Config) depSuffixComment(imp *resolver.Import) *build.Comment {
-	return &build.Comment{Token: fmt.Sprintf("# %v (%s %s)", imp.Kind, imp.Symbol.Provider, imp.Symbol.Name)}
-	// return &build.Comment{Token: fmt.Sprintf("# %v", imp.Kind)}
+	if c.shouldAnnotateDepLabelOrigin() {
+		return &build.Comment{Token: fmt.Sprintf("# %v (%s %s)", imp.Kind, imp.Symbol.Provider, imp.Symbol.Name)}
+	}
+	return &build.Comment{Token: fmt.Sprintf("# %v", imp.Kind)}
 }
 
 // ShouldFixWildcardImport tests whether the given symbol name pattern
@@ -762,6 +825,8 @@ func parseAnnotation(val string) debugAnnotation {
 		return DebugDeps
 	case "rule":
 		return DebugRule
+	case "dep_label_origin":
+		return DebugDepLabelOrigin
 	default:
 		return DebugUnknown
 	}

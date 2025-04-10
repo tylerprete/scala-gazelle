@@ -9,6 +9,9 @@ def merge_action(ctx, output_file, jarindex_files):
     args.use_param_file("@%s", use_always = False)
     args.add("--output_file", output_file)
     args.add_joined("--predefined", [target.label for target in ctx.attr.platform_deps], uniquify = True, join_with = ",")
+    for pkg, dep in ctx.attr.preferred_deps.items():
+        args.add("--preferred=%s=%s" % (pkg, dep))
+
     args.add_all(jarindex_files)
 
     ctx.actions.run(
@@ -45,8 +48,8 @@ def _java_index_impl(ctx):
         label = ctx.attr.platform_deps[i].label
         jarindex_files.append(jarindexer_action(ctx, label, "bootclasspath", ctx.executable._jarindexer, jar))
 
-    output_proto = ctx.outputs.out_proto
-    output_json = ctx.outputs.out_json
+    output_proto = ctx.outputs.proto
+    output_json = ctx.outputs.json
 
     jarindex_depset = depset(direct = jarindex_files, transitive = transitive_jarindex_files)
     files = jarindex_depset.to_list()
@@ -75,6 +78,9 @@ java_index = rule(
             doc = "list of java labels to be indexed without a JarSpec.Label, typically [@bazel_tools//tools/jdk:platformclasspath]",
             allow_files = True,
         ),
+        "preferred_deps": attr.string_dict(
+            doc = "mapping of package name to label that should be used for dependency resolution",
+        ),
         "_mergeindex": attr.label(
             default = Label("@build_stack_scala_gazelle//cmd/mergeindex"),
             cfg = "exec",
@@ -94,13 +100,9 @@ java_index = rule(
             allow_files = True,
             doc = "the ijar tool",
         ),
-        "out_proto": attr.output(
-            mandatory = True,
-            doc = "the name of the proto output file",
-        ),
-        "out_json": attr.output(
-            mandatory = True,
-            doc = "the name of the json output file",
-        ),
+    },
+    outputs = {
+        "proto": "%{name}.pb",
+        "json": "%{name}.json",
     },
 )
