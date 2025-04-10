@@ -7,6 +7,13 @@ def gazelle_extension_deps():
     """gazelle_extension_deps loads dependencies for the gazelle extension
     """
     go_repository(
+        name = "com_github_rs_zerolog",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/rs/zerolog",
+        sum = "h1:k43nTLIwcTVQAncfCw4KZ2VY6ukYoZaBPNOE8txlOeY=",
+        version = "v1.34.0",
+    )
+    go_repository(
         name = "com_github_emicklei_dot",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/emicklei/dot",
