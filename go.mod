@@ -12,6 +12,7 @@ require (
 	github.com/dghubble/trie v0.0.0-20220811160003-18e0eff3ca7b
 	github.com/google/go-cmp v0.5.9
 	github.com/pcj/mobyprogress v0.0.0-20221114203314-669a7801d484
+	github.com/rs/zerolog v1.34.0
 	github.com/stackb/rules_proto v0.0.0-20221020023827-830238a0c071
 	github.com/stretchr/testify v1.7.0
 	go.starlark.net v0.0.0-20220328144851-d1966c6b9fcd
@@ -29,7 +30,6 @@ require (
 	github.com/moby/term v0.0.0-20221105221325-4eb28fa6025c // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/stretchr/objx v0.1.0 // indirect
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
